@@ -49,6 +49,23 @@ body {
   z-index: 30;
   pointer-events: auto;
 }
+.audio-hint {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(168, 255, 106, 0.35);
+  background: rgba(8, 12, 16, 0.88);
+  color: rgba(168, 255, 106, 0.92);
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+}
 
 .topbar, .bottombar {
   display: flex;

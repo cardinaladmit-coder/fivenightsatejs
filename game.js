@@ -267,6 +267,8 @@ class Sound {
     this._proximityVolume = CONFIG.PROXIMITY_MUSIC_MIN_VOLUME;
     this._proximityOsc = null;
     this._proximityGain = null;
+    this.unlocked = false;
+    this._assetsReady = false;
   }
 
   setEnabled(on) {
@@ -283,21 +285,44 @@ class Sound {
   }
 
   async unlock() {
-    // Call in a user gesture to allow audio on Safari/Chrome autoplay policies.
+    // Call in a user gesture to allow audio on Safari/Chrome/mobile autoplay rules.
+    this.unlocked = true;
     this.ensureAudioContext();
     if (this.ctx && this.ctx.state === "suspended") {
       try { await this.ctx.resume(); } catch {}
     }
   }
 
+  waitForAudioReady(a, timeoutMs = 15000) {
+    if (a.readyState >= 3) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      const done = (ok) => {
+        clearTimeout(timer);
+        a.removeEventListener("canplaythrough", onReady);
+        a.removeEventListener("loadeddata", onReady);
+        a.removeEventListener("error", onErr);
+        resolve(ok);
+      };
+      const onReady = () => done(true);
+      const onErr = () => done(false);
+      const timer = setTimeout(() => done(a.readyState >= 2), timeoutMs);
+      a.addEventListener("canplaythrough", onReady, { once: true });
+      a.addEventListener("loadeddata", onReady, { once: true });
+      a.addEventListener("error", onErr, { once: true });
+    });
+  }
+
   async loadFile(key, src) {
     const a = new Audio();
-    a.src = src;
     a.preload = "auto";
     a.volume = 0.65;
     this.files.set(key, a);
-    // Try a metadata fetch; if it fails, we’ll still have beep fallback.
-    try { await a.play().then(() => a.pause()); } catch {}
+    a.src = src;
+    await this.waitForAudioReady(a);
+  }
+
+  setAssetsReady(ready) {
+    this._assetsReady = ready;
   }
 
   playFile(key, { volume = 0.75 } = {}) {
@@ -401,24 +426,33 @@ class Sound {
     this._musicNode = null;
   }
 
-  startProximityMusic() {
-    if (!this.enabled) return;
-    if (this._bgMusicPlaying) return;
-    this._proximityVolume = CONFIG.PROXIMITY_MUSIC_MIN_VOLUME;
+  async startProximityMusic() {
+    if (!this.enabled || !this.unlocked || !this._assetsReady) return false;
 
     const track = this.files.get("bgMusic");
     if (track) {
+      if (this._bgMusicPlaying && !track.paused) return true;
+      this._proximityVolume = CONFIG.PROXIMITY_MUSIC_MIN_VOLUME;
       track.loop = true;
       track.volume = this._proximityVolume;
-      this._bgMusicEl = track;
-      this._bgMusicPlaying = true;
-      try { void track.play(); } catch {}
-      return;
+      const ready = await this.waitForAudioReady(track, 12000);
+      if (!ready) return false;
+      try {
+        await track.play();
+        this._bgMusicEl = track;
+        this._bgMusicPlaying = true;
+        return true;
+      } catch {
+        this._bgMusicPlaying = false;
+        this._bgMusicEl = null;
+        return false;
+      }
     }
 
-    // Soft synth pad if no music file is provided yet.
+    if (this._bgMusicPlaying && this._proximityOsc) return true;
+    this._proximityVolume = CONFIG.PROXIMITY_MUSIC_MIN_VOLUME;
     this.ensureAudioContext();
-    if (!this.ctx) return;
+    if (!this.ctx) return false;
     const osc = this.ctx.createOscillator();
     const g = this.ctx.createGain();
     osc.type = "triangle";
@@ -430,6 +464,7 @@ class Sound {
     this._proximityOsc = osc;
     this._proximityGain = g;
     this._bgMusicPlaying = true;
+    return true;
   }
 
   setProximityLevel(level, dt) {
@@ -773,6 +808,9 @@ class Game {
     await this.sound.loadFile("door", AUDIO_SLOTS.door);
     await this.sound.loadFile("camera", AUDIO_SLOTS.camera);
     await this.sound.loadFile("jumpscare", AUDIO_SLOTS.jumpscare);
+    this.sound.setAssetsReady(true);
+    this.bindAudioUnlockHandlers();
+    this.setAudioHintVisible(this.sound.enabled);
   }
 
   // -------------------------
@@ -857,9 +895,10 @@ class Game {
       this.showTitleMenu();
     });
     $("#uiHow")?.addEventListener("click", () => this.toggleHelp(true));
-    $("#uiSound")?.addEventListener("click", () => {
+    $("#uiSound")?.addEventListener("click", async () => {
       this.sound.setEnabled(!this.sound.enabled);
-      if (this.sound.enabled) this.ensureBackgroundMusic();
+      if (this.sound.enabled) await this.ensureBackgroundMusic();
+      else this.setAudioHintVisible(false);
       this.showTitleMenu();
     });
     this.overlayRoot.querySelectorAll("button[data-night]").forEach((btn) => {
@@ -1124,8 +1163,35 @@ class Game {
     this.updateHud();
   }
 
-  ensureBackgroundMusic() {
-    this.sound.startProximityMusic();
+  setAudioHintVisible(show) {
+    const el = document.getElementById("audioHint");
+    if (el) el.classList.toggle("ui-hidden", !show);
+  }
+
+  async ensureBackgroundMusic() {
+    if (!this.sound.enabled) {
+      this.setAudioHintVisible(false);
+      return false;
+    }
+    const started = await this.sound.startProximityMusic();
+    this.setAudioHintVisible(this.sound.enabled && !started && this.sound.unlocked);
+    return started;
+  }
+
+  bindAudioUnlockHandlers() {
+    if (this._audioHandlersBound) return;
+    this._audioHandlersBound = true;
+
+    const tryAudio = () => {
+      void (async () => {
+        await this.sound.unlock();
+        await this.ensureBackgroundMusic();
+      })();
+    };
+
+    // pointerdown works better than click alone on phones/tablets.
+    document.addEventListener("pointerdown", tryAudio, { passive: true });
+    document.addEventListener("keydown", tryAudio);
   }
 
   getThreatProximity(th) {
@@ -1753,24 +1819,18 @@ function roundRect(ctx, x, y, w, h, r) {
 
   // Wire footer buttons
   btnCam?.addEventListener("click", () => game.toggleCameras());
-  btnMute?.addEventListener("click", () => {
+  btnMute?.addEventListener("click", async () => {
     game.sound.setEnabled(!game.sound.enabled);
-    if (game.sound.enabled) game.ensureBackgroundMusic();
+    if (game.sound.enabled) await game.ensureBackgroundMusic();
+    else game.setAudioHintVisible(false);
     if (btnMute) btnMute.textContent = `SOUND: ${game.sound.enabled ? "ON" : "OFF"}`;
   });
   btnHelp?.addEventListener("click", () => game.toggleHelp(true));
-  const startSiteMusic = async () => {
-    await game.sound.unlock();
-    game.ensureBackgroundMusic();
-  };
-
   document.getElementById("btnGetStarted")?.addEventListener("click", async () => {
-    await startSiteMusic();
+    await game.sound.unlock();
+    await game.ensureBackgroundMusic();
     game.showTitleMenu();
   });
-
-  // Browsers require a click before audio — start the bg track on first interaction.
-  document.addEventListener("click", () => { void startSiteMusic(); }, { once: true });
 
   await game.loadAssets();
   game.showTitle();
