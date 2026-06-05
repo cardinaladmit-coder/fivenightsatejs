@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Five Nights at EJ's</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar" aria-label="HUD top bar">
+        <div class="hud-left">
+          <div class="hud-pill"><span class="hud-label">NIGHT</span> <span id="hudNight">1</span></div>
+        </div>
+        <div class="hud-right">
+          <div class="hud-pill"><span id="hudTime">12:00 AM</span></div>
+        </div>
+      </header>
+
+      <main class="stage">
+        <canvas id="game" width="960" height="540" aria-label="Game canvas"></canvas>
+      </main>
+
+      <footer class="bottombar" aria-label="Controls bottom bar">
+        <div class="hud-bottom-left">
+          <div class="power">
+            <div class="power-row">
+              <span class="hud-label">POWER</span>
+              <span id="hudPower">100%</span>
+            </div>
+            <div class="usage" aria-label="Power usage indicator">
+              <div class="usage-label">USAGE</div>
+              <div class="usage-bars" id="hudUsageBars">
+                <span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="hud-bottom-right">
+          <button id="btnCam" class="btn btn-primary" type="button">CAMERAS</button>
+          <button id="btnMute" class="btn" type="button" title="Toggle sound">SOUND: ON</button>
+          <button id="btnHelp" class="btn" type="button">HELP</button>
+        </div>
+      </footer>
+
+      <!-- Click-catcher / UI overlays (menus, camera panel, etc.) -->
+      <div id="overlayRoot" class="overlay-root" aria-live="polite"></div>
+    </div>
+
+    <script defer src="./game.js"></script>
+  </body>
+</html>
