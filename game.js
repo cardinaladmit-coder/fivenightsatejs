@@ -53,6 +53,11 @@ const CONFIG = {
 
   // Input / UI
   DOUBLE_CLICK_PROTECTION_MS: 120,
+
+  // Background music swells as EJ gets closer (never gets super loud).
+  PROXIMITY_MUSIC_MIN_VOLUME: 0.07,
+  PROXIMITY_MUSIC_MAX_VOLUME: 0.36,
+  PROXIMITY_MUSIC_SMOOTH_SPEED: 2.8,
 };
 
 // Add/swap threats here (this is the main "dead simple" customization point).
@@ -136,6 +141,7 @@ const ASSET_SLOTS = {
 // Optional audio files. If missing, the game will use WebAudio beeps.
 const AUDIO_SLOTS = {
   ambient: "assets/audio/ambient_hum.mp3",
+  bgMusic: "assets/audio/bg_music.mp3",
   door: "assets/audio/door_clunk.mp3",
   camera: "assets/audio/camera_blip.mp3",
   jumpscare: "assets/audio/jumpscare_stinger.mp3",
@@ -256,11 +262,16 @@ class Sound {
     this._musicNode = null;
     this._lastAmbientStart = 0;
     this.files = new Map(); // key => HTMLAudioElement
+    this._bgMusicEl = null;
+    this._bgMusicPlaying = false;
+    this._proximityVolume = CONFIG.PROXIMITY_MUSIC_MIN_VOLUME;
+    this._proximityOsc = null;
+    this._proximityGain = null;
   }
 
   setEnabled(on) {
     this.enabled = on;
-    if (!on) this.stopAmbient();
+    if (!on) this.stopNightAudio();
     if (on) this.ensureAudioContext();
   }
 
@@ -379,17 +390,83 @@ class Sound {
   }
 
   stopAmbient() {
-    if (this.playFile("ambient")) {
-      const a = this.files.get("ambient");
-      if (a) {
-        try { a.pause(); } catch {}
-      }
+    const a = this.files.get("ambient");
+    if (a) {
+      try { a.pause(); } catch {}
     }
     const n = this._musicNode;
     if (!n) return;
     try { n.osc.stop(); } catch {}
     try { n.lfo.stop(); } catch {}
     this._musicNode = null;
+  }
+
+  startProximityMusic() {
+    if (!this.enabled) return;
+    this.stopProximityMusic();
+    this._proximityVolume = CONFIG.PROXIMITY_MUSIC_MIN_VOLUME;
+
+    const track = this.files.get("bgMusic");
+    if (track) {
+      track.loop = true;
+      track.volume = this._proximityVolume;
+      this._bgMusicEl = track;
+      this._bgMusicPlaying = true;
+      try { void track.play(); } catch {}
+      return;
+    }
+
+    // Soft synth pad if no music file is provided yet.
+    this.ensureAudioContext();
+    if (!this.ctx) return;
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.value = 110;
+    g.gain.value = this._proximityVolume * 0.055;
+    osc.connect(g);
+    g.connect(this.ctx.destination);
+    osc.start();
+    this._proximityOsc = osc;
+    this._proximityGain = g;
+    this._bgMusicPlaying = true;
+  }
+
+  setProximityLevel(level, dt) {
+    if (!this.enabled || !this._bgMusicPlaying) return;
+    const target = lerp(
+      CONFIG.PROXIMITY_MUSIC_MIN_VOLUME,
+      CONFIG.PROXIMITY_MUSIC_MAX_VOLUME,
+      clamp(level, 0, 1),
+    );
+    const smooth = 1 - Math.exp(-CONFIG.PROXIMITY_MUSIC_SMOOTH_SPEED * dt);
+    this._proximityVolume = lerp(this._proximityVolume, target, smooth);
+
+    if (this._bgMusicEl) {
+      this._bgMusicEl.volume = this._proximityVolume;
+    }
+    if (this._proximityGain) {
+      this._proximityGain.gain.value = this._proximityVolume * 0.055;
+    }
+  }
+
+  stopProximityMusic() {
+    this._bgMusicPlaying = false;
+    this._bgMusicEl = null;
+    const track = this.files.get("bgMusic");
+    if (track) {
+      try { track.pause(); } catch {}
+    }
+    if (this._proximityOsc) {
+      try { this._proximityOsc.stop(); } catch {}
+      this._proximityOsc = null;
+    }
+    this._proximityGain = null;
+  }
+
+  stopNightAudio() {
+    this.stopAmbient();
+    this.stopProximityMusic();
   }
 }
 
@@ -692,6 +769,7 @@ class Game {
 
     // Audio
     await this.sound.loadFile("ambient", AUDIO_SLOTS.ambient);
+    await this.sound.loadFile("bgMusic", AUDIO_SLOTS.bgMusic);
     await this.sound.loadFile("door", AUDIO_SLOTS.door);
     await this.sound.loadFile("camera", AUDIO_SLOTS.camera);
     await this.sound.loadFile("jumpscare", AUDIO_SLOTS.jumpscare);
@@ -817,6 +895,7 @@ class Game {
             <p><strong>Cameras:</strong> hit <kbd>C</kbd> or click <strong>CAMERAS</strong> to watch rooms. Threats advance faster when you ignore them.</p>
             <p><strong>Doors:</strong> left and right each have a <strong>CLOSE</strong> and <strong>LIGHT</strong>. Close blocks EJ at that side. Light reveals if EJ is waiting.</p>
             <p><strong>Power:</strong> everything drains power. If power hits <strong>0%</strong>, doors open and you’re defenseless.</p>
+            <p><strong>Audio cue:</strong> a background track plays quietly all night and <strong>slowly gets louder</strong> as EJ gets closer to your office. It never gets super loud — but if the music swells, check your doors.</p>
             <p><strong>Keyboard:</strong> <kbd>A</kbd> left door, <kbd>D</kbd> right door, <kbd>Q</kbd> left light, <kbd>E</kbd> right light, <kbd>C</kbd> cameras, <kbd>Esc</kbd> close cameras/help.</p>
             <p style="color: rgba(255,214,90,0.92)"><strong>Pro tip:</strong> Don’t camp both doors closed. Use the lights to confirm, then close only when needed.</p>
           </div>
@@ -830,7 +909,7 @@ class Game {
     this.mode = "NIGHTCLEAR";
     this.titleMenuOpen = false;
     this.updateChromeVisibility();
-    this.sound.stopAmbient();
+    this.sound.stopNightAudio();
     const nightNum = this.nightIndex + 1;
     const nextNight = nightNum + 1;
     const isWin = nightNum >= 5;
@@ -862,7 +941,7 @@ class Game {
     this.mode = "WIN";
     this.titleMenuOpen = false;
     this.updateChromeVisibility();
-    this.sound.stopAmbient();
+    this.sound.stopNightAudio();
     this.mountOverlay(`
       <div class="overlay" role="dialog" aria-label="Win screen">
         <div class="panel">
@@ -886,7 +965,7 @@ class Game {
     this.mode = "GAMEOVER";
     this.titleMenuOpen = false;
     this.updateChromeVisibility();
-    this.sound.stopAmbient();
+    this.sound.stopNightAudio();
     const t = THREATS.find((x) => x.id === threatId);
     const name = t?.name || "EJ";
     this.mountOverlay(`
@@ -1043,8 +1122,29 @@ class Game {
     const lanes = ["LEFT", "RIGHT", "WANDER", "WANDER"];
     this.threats = defs.map((d, i) => new Threat(d, lanes[i % lanes.length], diff, this.nightIndex));
 
-    this.sound.startAmbient();
+    this.sound.startProximityMusic();
     this.updateHud();
+  }
+
+  getThreatProximity(th) {
+    if (!th.alive) return 0;
+    if (th.inOffice()) return 1;
+    if (th.atLeftDoor() || th.atRightDoor()) return th.waitingAtDoor ? 0.92 : 0.86;
+    const steps = Math.max(1, th.path.length - 1);
+    return clamp(th.pathIndex / steps, 0, 0.78);
+  }
+
+  computeClosestThreatProximity() {
+    let closest = 0;
+    for (const th of this.threats) {
+      closest = Math.max(closest, this.getThreatProximity(th));
+    }
+    return closest;
+  }
+
+  updateProximityMusic(dt) {
+    const level = this.computeClosestThreatProximity();
+    this.sound.setProximityLevel(level, dt);
   }
 
   clearNight() {
@@ -1222,6 +1322,7 @@ class Game {
     this.mode = "JUMPSCARE";
     this.lastScareThreatId = threatId;
     this.attackCountdown = null;
+    this.sound.stopNightAudio();
     this.sound.jumpscareSting();
 
     // Show jumpscare, then game over overlay.
@@ -1614,6 +1715,7 @@ class Game {
       this.updateClock();
       this.drainPower(dt);
       this.updateThreats();
+      this.updateProximityMusic(dt);
       this.updateHud();
     }
     this.render();
