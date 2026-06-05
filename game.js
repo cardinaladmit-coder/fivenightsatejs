@@ -690,7 +690,7 @@ class Game {
           </div>
           <div class="panel-body">
             <h1 class="title">Five Nights at EJ's</h1>
-            <p class="subtitle">Survive 12 AM → 6 AM. Keep the doors shut. Keep the power up. Don't let EJ touch your... valuables.</p>
+            <p class="subtitle">Survive 12 AM → 6 AM. Keep the doors shut. Keep the power up. Don't let EJ touch your... dih.</p>
 
             <div class="menu-grid">
               <div class="menu-row">
