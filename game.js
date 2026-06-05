@@ -1517,17 +1517,10 @@ class Game {
       g.drawImage(this.assets.titleBg, 0, 0, 960, 540);
     } else {
       this.drawScreenFallback(g, "title");
-      g.save();
-      g.textAlign = "center";
-      g.font = "900 52px ui-monospace, Menlo, Monaco, Consolas, 'Courier New', monospace";
-      g.fillStyle = "rgba(255,255,255,0.95)";
-      g.fillText(MESSAGES.titleLine1, 480, 175);
-      g.fillText(MESSAGES.titleLine2, 480, 235);
-      g.textAlign = "left";
-      g.restore();
     }
+
     g.save();
-    // Subtle edge vignette only — keep the homepage image clean.
+    // Subtle edge vignette so title text stays readable over custom art.
     const shade = g.createRadialGradient(480, 270, 180, 480, 270, 520);
     shade.addColorStop(0, "rgba(0,0,0,0.0)");
     shade.addColorStop(0.75, "rgba(0,0,0,0.12)");
@@ -1535,10 +1528,25 @@ class Game {
     g.fillStyle = shade;
     g.fillRect(0, 0, 960, 540);
 
-    // EJ photos on the homepage (no text overlay — title_bg carries the art).
+    // EJ photos on the homepage.
     const [leftId, rightId] = TITLE_COVER_THREATS;
     this.drawTitleCoverFace(g, this.assets.threatFaces.get(leftId), 130, 255, 340, { tilt: -0.08 });
     this.drawTitleCoverFace(g, this.assets.threatFaces.get(rightId), 830, 255, 340, { flip: true, tilt: 0.08 });
+
+    // Title text always drawn on top (custom title_bg may not include lettering).
+    g.textAlign = "center";
+    g.font = "900 52px ui-monospace, Menlo, Monaco, Consolas, 'Courier New', monospace";
+    g.fillStyle = "rgba(0,0,0,0.55)";
+    g.fillText(MESSAGES.titleLine1, 482, 177);
+    g.fillText(MESSAGES.titleLine2, 482, 237);
+    g.fillStyle = "rgba(255,255,255,0.96)";
+    g.fillText(MESSAGES.titleLine1, 480, 175);
+    g.fillStyle = "rgba(168,255,106,0.95)";
+    g.fillText(MESSAGES.titleLine2, 480, 235);
+    g.font = "600 17px ui-monospace, Menlo, Monaco, Consolas, 'Courier New', monospace";
+    g.fillStyle = "rgba(210,227,234,0.88)";
+    g.fillText(MESSAGES.titleHint, 480, 275);
+    g.textAlign = "left";
     g.restore();
     this.drawFilmGrain(g, 0.08);
   }
