@@ -117,6 +117,7 @@ const ASSET_SLOTS = {
   winScreen: "assets/win_screen.png",
   gameOverBg: "assets/gameover_bg.png",
   officeBg: "assets/office_bg.png",
+  hallways: "assets/hallways.png",
   doorLeft: "assets/door_left.png",
   doorRight: "assets/door_right.png",
   cameraMap: "assets/camera_map.png",
@@ -124,8 +125,8 @@ const ASSET_SLOTS = {
     "assets/room_cam1.png",
     "assets/room_cam2.png",
     "assets/room_cam3.png",
-    "assets/hallways.png", // CAM 4 — west hall path (The Shed)
-    "assets/hallways.png", // CAM 5 — east hall path (Roble), flipped in-game
+    "assets/room_cam4.png",
+    "assets/room_cam5.png",
     "assets/room_cam6.png",
     "assets/room_cam7.png",
     "assets/room_cam8.png",
@@ -230,6 +231,16 @@ function loadImageOrPlaceholder(src, placeholderLabel, { w = 960, h = 540, bg } 
       ph.onload = () => resolve(ph);
       ph.src = makePlaceholderDataUrl(placeholderLabel, w, h, bg || "#23324a");
     };
+    img.src = src;
+  });
+}
+
+// Like loadImageOrPlaceholder, but returns null instead of an ugly placeholder box.
+function loadImageOptional(src) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
     img.src = src;
   });
 }
@@ -517,6 +528,7 @@ class Game {
       winScreen: null,
       gameOverBg: null,
       officeBg: null,
+      hallways: null,
       doorLeft: null,
       doorRight: null,
       cameraMap: null,
@@ -651,10 +663,11 @@ class Game {
 
   async loadAssets() {
     // Environment
-    this.assets.titleBg = await loadImageOrPlaceholder(ASSET_SLOTS.titleBg, "title_bg.png", { w: 960, h: 540, bg: "#1b2230" });
-    this.assets.winScreen = await loadImageOrPlaceholder(ASSET_SLOTS.winScreen, "win_screen.png", { w: 960, h: 540, bg: "#0d1f14" });
-    this.assets.gameOverBg = await loadImageOrPlaceholder(ASSET_SLOTS.gameOverBg, "gameover_bg.png", { w: 960, h: 540, bg: "#2a0b12" });
+    this.assets.titleBg = await loadImageOptional(ASSET_SLOTS.titleBg);
+    this.assets.winScreen = await loadImageOptional(ASSET_SLOTS.winScreen);
+    this.assets.gameOverBg = await loadImageOptional(ASSET_SLOTS.gameOverBg);
     this.assets.officeBg = await loadImageOrPlaceholder(ASSET_SLOTS.officeBg, "office_bg.png", { w: 960, h: 540, bg: "#141a22" });
+    this.assets.hallways = await loadImageOrPlaceholder(ASSET_SLOTS.hallways, "hallways.png", { w: 320, h: 540, bg: "#121820" });
     this.assets.doorLeft = await loadImageOrPlaceholder(ASSET_SLOTS.doorLeft, "door_left.png", { w: 320, h: 540, bg: "#1a1f2a" });
     this.assets.doorRight = await loadImageOrPlaceholder(ASSET_SLOTS.doorRight, "door_right.png", { w: 320, h: 540, bg: "#1a1f2a" });
     this.assets.cameraMap = await loadImageOrPlaceholder(ASSET_SLOTS.cameraMap, "camera_map.png", { w: 420, h: 280, bg: "#1a202b" });
@@ -700,22 +713,13 @@ class Game {
     this.mode = "TITLE";
     this.titleMenuOpen = false;
     this.clearOverlays();
-    this.mountOverlay(`
-      <div class="overlay overlay-home" role="dialog" aria-label="Homepage">
-        <div class="home-actions">
-          <button id="uiGetStarted" class="btn btn-primary btn-hero" type="button">${MESSAGES.getStartedLabel}</button>
-        </div>
-      </div>
-    `);
-    this.overlayRoot.querySelector("#uiGetStarted")?.addEventListener("click", async () => {
-      await this.sound.unlock();
-      this.showTitleMenu();
-    });
+    this.updateChromeVisibility();
   }
 
   showTitleMenu() {
     this.mode = "TITLE";
     this.titleMenuOpen = true;
+    this.updateChromeVisibility();
     const unlocked = this.progress.maxNightBeaten;
     const nightOptions = Array.from({ length: 5 }, (_, i) => {
       const nightNum = i + 1;
@@ -824,6 +828,8 @@ class Game {
 
   showNightClear() {
     this.mode = "NIGHTCLEAR";
+    this.titleMenuOpen = false;
+    this.updateChromeVisibility();
     this.sound.stopAmbient();
     const nightNum = this.nightIndex + 1;
     const nextNight = nightNum + 1;
@@ -854,6 +860,8 @@ class Game {
 
   showWin() {
     this.mode = "WIN";
+    this.titleMenuOpen = false;
+    this.updateChromeVisibility();
     this.sound.stopAmbient();
     this.mountOverlay(`
       <div class="overlay" role="dialog" aria-label="Win screen">
@@ -876,6 +884,8 @@ class Game {
 
   showGameOver(threatId) {
     this.mode = "GAMEOVER";
+    this.titleMenuOpen = false;
+    this.updateChromeVisibility();
     this.sound.stopAmbient();
     const t = THREATS.find((x) => x.id === threatId);
     const name = t?.name || "EJ";
@@ -992,10 +1002,26 @@ class Game {
   // Night lifecycle
   // -------------------------
 
+  updateChromeVisibility() {
+    const app = document.getElementById("app");
+    const isTitleHome = this.mode === "TITLE" && !this.titleMenuOpen;
+    const hideHud = this.mode === "TITLE" || this.mode === "WIN" || this.mode === "GAMEOVER" || this.mode === "NIGHTCLEAR";
+
+    app?.classList.toggle("title-mode", isTitleHome);
+
+    const getStarted = document.getElementById("btnGetStarted");
+    if (getStarted) {
+      getStarted.textContent = MESSAGES.getStartedLabel;
+      getStarted.classList.toggle("ui-hidden", !isTitleHome);
+    }
+  }
+
   startNight(nightIndex) {
     this.helpOpen = false;
     this.clearOverlays();
     this.mode = "PLAY";
+    this.titleMenuOpen = false;
+    this.updateChromeVisibility();
     this.nightIndex = clamp(nightIndex, 0, 4);
     this.power = CONFIG.POWER_START;
     this.leftDoorClosed = false;
@@ -1225,9 +1251,22 @@ class Game {
   // Rendering
   // -------------------------
 
+  drawHallwayViews(g) {
+    const hall = this.assets.hallways;
+    if (!hall) return;
+    // Hallway photo visible in door openings; doors slide closed on top.
+    g.drawImage(hall, 0, 0, 320, 540);
+    g.save();
+    g.translate(960, 0);
+    g.scale(-1, 1);
+    g.drawImage(hall, 0, 0, 320, 540);
+    g.restore();
+  }
+
   drawOffice(g) {
     // Background
     g.drawImage(this.assets.officeBg, 0, 0, 960, 540);
+    this.drawHallwayViews(g);
 
     // Doors (render overlays when closed)
     // Left door graphic: slide in from left for a nice feel
@@ -1359,20 +1398,7 @@ class Game {
 
   drawCamerasFeed(g) {
     const roomImg = this.assets.rooms[this.camRoom];
-    const isEastHall = this.camRoom === ROOM.HALL_E;
-
-    // Draw selected room still (east hall uses a mirrored hallway photo).
-    if (roomImg) {
-      if (isEastHall) {
-        g.save();
-        g.translate(960, 0);
-        g.scale(-1, 1);
-        g.drawImage(roomImg, 0, 0, 960, 540);
-        g.restore();
-      } else {
-        g.drawImage(roomImg, 0, 0, 960, 540);
-      }
-    }
+    if (roomImg) g.drawImage(roomImg, 0, 0, 960, 540);
 
     // Composite any threats that are currently in this room
     for (const th of this.threats) {
@@ -1381,13 +1407,13 @@ class Game {
         const face = this.assets.threatFaces.get(th.def.id);
         if (!face) continue;
         const wob = Math.sin(performance.now() / 170 + this.camRoom * 2.2) * 4;
-        const x = isEastHall ? 440 - wob : 520 + wob;
+        const x = 520 + wob;
         const y = 270 + Math.cos(performance.now() / 210) * 3;
         const size = 220;
         g.save();
         g.globalAlpha = 0.86;
         g.translate(x, y);
-        g.rotate(isEastHall ? -0.03 : 0.03);
+        g.rotate(0.03);
         g.drawImage(face, -size / 2, -size / 2, size, size);
         g.restore();
       }
@@ -1472,42 +1498,60 @@ class Game {
     g.restore();
   }
 
+  drawScreenFallback(g, tone = "title") {
+    const palettes = {
+      title: ["#0a0e14", "#141c28"],
+      win: ["#0a140f", "#102218"],
+      gameover: ["#14080c", "#241018"],
+    };
+    const [c0, c1] = palettes[tone] || palettes.title;
+    const grad = g.createLinearGradient(0, 0, 0, 540);
+    grad.addColorStop(0, c0);
+    grad.addColorStop(1, c1);
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 960, 540);
+  }
+
   drawTitleBackground(g) {
-    g.drawImage(this.assets.titleBg, 0, 0, 960, 540);
+    if (this.assets.titleBg) {
+      g.drawImage(this.assets.titleBg, 0, 0, 960, 540);
+    } else {
+      this.drawScreenFallback(g, "title");
+      g.save();
+      g.textAlign = "center";
+      g.font = "900 52px ui-monospace, Menlo, Monaco, Consolas, 'Courier New', monospace";
+      g.fillStyle = "rgba(255,255,255,0.95)";
+      g.fillText(MESSAGES.titleLine1, 480, 175);
+      g.fillText(MESSAGES.titleLine2, 480, 235);
+      g.textAlign = "left";
+      g.restore();
+    }
     g.save();
-    // Light vignette so the homepage art and EJs stay visible.
-    const shade = g.createRadialGradient(480, 250, 120, 480, 250, 500);
-    shade.addColorStop(0, "rgba(0,0,0,0.18)");
-    shade.addColorStop(0.7, "rgba(0,0,0,0.28)");
-    shade.addColorStop(1, "rgba(0,0,0,0.42)");
+    // Subtle edge vignette only — keep the homepage image clean.
+    const shade = g.createRadialGradient(480, 270, 180, 480, 270, 520);
+    shade.addColorStop(0, "rgba(0,0,0,0.0)");
+    shade.addColorStop(0.75, "rgba(0,0,0,0.12)");
+    shade.addColorStop(1, "rgba(0,0,0,0.32)");
     g.fillStyle = shade;
     g.fillRect(0, 0, 960, 540);
 
-    // Large EJ photos on the homepage.
+    // EJ photos on the homepage (no text overlay — title_bg carries the art).
     const [leftId, rightId] = TITLE_COVER_THREATS;
     this.drawTitleCoverFace(g, this.assets.threatFaces.get(leftId), 130, 255, 340, { tilt: -0.08 });
     this.drawTitleCoverFace(g, this.assets.threatFaces.get(rightId), 830, 255, 340, { flip: true, tilt: 0.08 });
-
-    g.textAlign = "center";
-    g.font = "900 52px ui-monospace, Menlo, Monaco, Consolas, 'Courier New', monospace";
-    g.fillStyle = "rgba(255,255,255,0.95)";
-    g.fillText(MESSAGES.titleLine1, 480, 175);
-    g.fillText(MESSAGES.titleLine2, 480, 235);
-    g.font = "600 17px ui-monospace, Menlo, Monaco, Consolas, 'Courier New', monospace";
-    g.fillStyle = "rgba(168,255,106,0.82)";
-    g.fillText(MESSAGES.titleHint, 480, 275);
-    g.textAlign = "left";
     g.restore();
-    this.drawFilmGrain(g, 0.10);
+    this.drawFilmGrain(g, 0.08);
   }
 
   drawWinBackground(g) {
-    g.drawImage(this.assets.winScreen, 0, 0, 960, 540);
+    if (this.assets.winScreen) g.drawImage(this.assets.winScreen, 0, 0, 960, 540);
+    else this.drawScreenFallback(g, "win");
     this.drawFilmGrain(g, 0.09);
   }
 
   drawGameOverBackground(g) {
-    g.drawImage(this.assets.gameOverBg, 0, 0, 960, 540);
+    if (this.assets.gameOverBg) g.drawImage(this.assets.gameOverBg, 0, 0, 960, 540);
+    else this.drawScreenFallback(g, "gameover");
     this.drawFilmGrain(g, 0.12);
   }
 
@@ -1600,6 +1644,10 @@ function roundRect(ctx, x, y, w, h, r) {
     if (btnMute) btnMute.textContent = `SOUND: ${game.sound.enabled ? "ON" : "OFF"}`;
   });
   btnHelp?.addEventListener("click", () => game.toggleHelp(true));
+  document.getElementById("btnGetStarted")?.addEventListener("click", async () => {
+    await game.sound.unlock();
+    game.showTitleMenu();
+  });
 
   await game.loadAssets();
   game.showTitle();

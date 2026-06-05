@@ -31,6 +31,24 @@ body {
   display: grid;
   grid-template-rows: auto 1fr auto;
 }
+#app.title-mode {
+  grid-template-rows: 1fr;
+}
+#app.title-mode .topbar,
+#app.title-mode .bottombar {
+  display: none;
+}
+.ui-hidden {
+  display: none !important;
+}
+.title-start-btn {
+  position: fixed;
+  bottom: clamp(28px, 6vh, 56px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  pointer-events: auto;
+}
 
 .topbar, .bottombar {
   display: flex;
@@ -167,16 +185,6 @@ canvas#game {
   pointer-events: auto;
   background: rgba(0,0,0,0.55);
   backdrop-filter: blur(2px);
-}
-.overlay-home {
-  background: transparent;
-  backdrop-filter: none;
-  align-items: flex-end;
-  padding-bottom: clamp(28px, 6vh, 56px);
-  pointer-events: none;
-}
-.home-actions {
-  pointer-events: auto;
 }
 .btn-hero {
   font-size: 18px;

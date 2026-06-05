@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <div id="app">
+    <div id="app" class="title-mode">
       <header class="topbar" aria-label="HUD top bar">
         <div class="hud-left">
           <div class="hud-pill"><span class="hud-label">NIGHT</span> <span id="hudNight">1</span></div>
@@ -46,6 +46,7 @@
 
       <!-- Click-catcher / UI overlays (menus, camera panel, etc.) -->
       <div id="overlayRoot" class="overlay-root" aria-live="polite"></div>
+      <button id="btnGetStarted" class="btn btn-primary btn-hero title-start-btn" type="button">Let's Get Started</button>
     </div>
 
     <script defer src="./game.js"></script>
