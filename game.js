@@ -13,31 +13,38 @@
 
 const CONFIG = {
   // Night length / clock pacing. The in-game clock goes 12 AM → 6 AM (6 "hours").
-  NIGHT_DURATION_SECONDS: 300, // 5 minutes per night. Try 360 for slower pacing.
+  NIGHT_DURATION_SECONDS: 240, // 4 minutes per night (was 300). Lower = faster nights.
 
   // Power model
   POWER_START: 100,
-  POWER_DRAIN_BASE_PER_SEC: 0.035, // always draining a little
-  POWER_DRAIN_CAMERA_PER_SEC: 0.10,
-  POWER_DRAIN_DOOR_CLOSED_PER_SEC: 0.09, // per closed door
-  POWER_DRAIN_LIGHT_ON_PER_SEC: 0.13, // per light
-  POWER_DRAIN_SPIKE_DOOR_TOGGLE: 0.18,
-  POWER_DRAIN_SPIKE_CAMERA_TOGGLE: 0.10,
+  POWER_DRAIN_BASE_PER_SEC: 0.045, // always draining a little
+  POWER_DRAIN_CAMERA_PER_SEC: 0.12,
+  POWER_DRAIN_DOOR_CLOSED_PER_SEC: 0.11, // per closed door
+  POWER_DRAIN_LIGHT_ON_PER_SEC: 0.15, // per light
+  POWER_DRAIN_SPIKE_DOOR_TOGGLE: 0.20,
+  POWER_DRAIN_SPIKE_CAMERA_TOGGLE: 0.12,
 
   // How quickly nights get harder (also affects power drain a bit)
-  NIGHT_DIFFICULTY_MULT: [1.0, 1.25, 1.55, 1.9, 2.25],
+  NIGHT_DIFFICULTY_MULT: [1.0, 1.35, 1.7, 2.1, 2.5],
 
   // Threat movement timing (seconds). Each threat rolls a random delay per step.
-  THREAT_MOVE_BASE_MIN_SEC: 10,
-  THREAT_MOVE_BASE_MAX_SEC: 18,
-  THREAT_MOVE_NIGHT_MULT: [1.0, 0.88, 0.78, 0.68, 0.60], // lower = faster movement
+  THREAT_MOVE_BASE_MIN_SEC: 5,
+  THREAT_MOVE_BASE_MAX_SEC: 9,
+  THREAT_MOVE_NIGHT_MULT: [1.0, 0.80, 0.65, 0.52, 0.42], // lower = faster movement
 
   // How long a threat waits at a door before attempting to enter (seconds).
-  DOOR_WAIT_MIN_SEC: 3,
-  DOOR_WAIT_MAX_SEC: 7,
+  DOOR_WAIT_MIN_SEC: 1.5,
+  DOOR_WAIT_MAX_SEC: 3.5,
+
+  // How long EJ waits after a blocked door before trying again (seconds).
+  DOOR_BOUNCE_MIN_SEC: 2,
+  DOOR_BOUNCE_MAX_SEC: 4,
 
   // If the threat is at an open door, this is how long until you get got.
-  OFFICE_ATTACK_GRACE_SEC: 0.9,
+  OFFICE_ATTACK_GRACE_SEC: 0.35,
+
+  // How long the full-screen jumpscare image stays up before game over (milliseconds).
+  JUMPSCARE_DURATION_MS: 2500,
 
   // Camera feel
   CAMERA_STATIC_INTENSITY: 0.22,
@@ -56,34 +63,34 @@ const THREATS = [
     name: "EJ (Classic)",
     faceImg: "assets/ej_threat1.png",
     jumpscareImg: "assets/ej_jumpscare1.png",
-    speed: 1.0,
+    speed: 1.15,
   },
   {
     id: "threat2",
     name: "EJ (Goblin Mode)",
     faceImg: "assets/ej_threat2.png",
     jumpscareImg: "assets/ej_jumpscare2.png",
-    speed: 1.1,
+    speed: 1.3,
   },
   {
     id: "threat3",
     name: "EJ (Sneaky)",
     faceImg: "assets/ej_threat3.png",
     jumpscareImg: "assets/ej_jumpscare3.png",
-    speed: 1.22,
+    speed: 1.45,
   },
   {
     id: "threat4",
     name: "EJ (Turbo)",
     faceImg: "assets/ej_threat4.png",
     jumpscareImg: "assets/ej_jumpscare4.png",
-    speed: 1.35,
+    speed: 1.6,
   },
 ];
 
 // Which (and how many) threats are active per night.
 // Tweak this to make nights gentler or meaner.
-const THREATS_PER_NIGHT = [2, 3, 3, 4, 4];
+const THREATS_PER_NIGHT = [3, 3, 4, 4, 4];
 
 // Asset slots for environment. You can replace these files in /assets.
 const ASSET_SLOTS = {
@@ -1099,7 +1106,7 @@ class Game {
             th.waitingAtDoor = false;
             th.room = ROOM.HALL_W;
             th.pathIndex = Math.max(0, th.path.indexOf(ROOM.HALL_W));
-            th.scheduleNextMove(rand(4, 7));
+            th.scheduleNextMove(rand(CONFIG.DOOR_BOUNCE_MIN_SEC, CONFIG.DOOR_BOUNCE_MAX_SEC));
           } else {
             this.startAttackGrace(th.def.id);
           }
@@ -1108,7 +1115,7 @@ class Game {
             th.waitingAtDoor = false;
             th.room = ROOM.HALL_E;
             th.pathIndex = Math.max(0, th.path.indexOf(ROOM.HALL_E));
-            th.scheduleNextMove(rand(4, 7));
+            th.scheduleNextMove(rand(CONFIG.DOOR_BOUNCE_MIN_SEC, CONFIG.DOOR_BOUNCE_MAX_SEC));
           } else {
             this.startAttackGrace(th.def.id);
           }
@@ -1147,10 +1154,10 @@ class Game {
     this.attackCountdown = null;
     this.sound.jumpscareSting();
 
-    // Show jumpscare for a short moment, then game over overlay.
+    // Show jumpscare, then game over overlay.
     setTimeout(() => {
       if (this.mode === "JUMPSCARE") this.showGameOver(threatId);
-    }, 900);
+    }, CONFIG.JUMPSCARE_DURATION_MS);
   }
 
   updateHud() {
