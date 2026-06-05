@@ -92,6 +92,23 @@ const THREATS = [
 // Tweak this to make nights gentler or meaner.
 const THREATS_PER_NIGHT = [3, 3, 4, 4, 4];
 
+// All intro / end story text in one place. Edit these to change what players see.
+const MESSAGES = {
+  gameTitle: "Five Nights at EJ's",
+  titleLine1: "FIVE NIGHTS",
+  titleLine2: "AT EJ'S",
+  titleHint: "Press Start • Or hit C in-game for cameras",
+  introSubtitle: "Survive 12 AM → 6 AM. Keep the doors shut. Keep the power up. Don't let EJ touch your... dih.",
+  nightCleared: (nightNum) => `You survived Night ${nightNum}.`,
+  finalNightCleared: "EJ has been defeated (for now). Your booty remains un-stolen.",
+  winMessage: "Five Nights survived. EJ may return… but not tonight.",
+  gameOver: (ejName) => `${ejName} reached your office. Unfortunate.`,
+};
+
+// Which two EJ photos appear on the title/cover screen (must match THREATS ids above).
+// Uses ej_threat1.png and ej_threat2.png by default.
+const TITLE_COVER_THREATS = ["threat1", "threat2"];
+
 // Asset slots for environment. You can replace these files in /assets.
 const ASSET_SLOTS = {
   titleBg: "assets/title_bg.png",
@@ -690,14 +707,14 @@ class Game {
       <div class="overlay" role="dialog" aria-label="Title screen">
         <div class="panel">
           <div class="panel-header">
-            <div class="panel-title">Five Nights at EJ's</div>
+            <div class="panel-title">${MESSAGES.gameTitle}</div>
             <div class="panel-actions">
               <button id="uiSound" class="btn" type="button">SOUND: ${this.sound.enabled ? "ON" : "OFF"}</button>
             </div>
           </div>
           <div class="panel-body">
-            <h1 class="title">Five Nights at EJ's</h1>
-            <p class="subtitle">Survive 12 AM → 6 AM. Keep the doors shut. Keep the power up. Don't let EJ touch your... dih.</p>
+            <h1 class="title">${MESSAGES.gameTitle}</h1>
+            <p class="subtitle">${MESSAGES.introSubtitle}</p>
 
             <div class="menu-grid">
               <div class="menu-row">
@@ -797,7 +814,7 @@ class Game {
             </div>
           </div>
           <div class="panel-body">
-            <p class="subtitle">${isWin ? "EJ has been defeated (for now). Your booty remains un-stolen." : `You survived Night ${nightNum}.`}</p>
+            <p class="subtitle">${isWin ? MESSAGES.finalNightCleared : MESSAGES.nightCleared(nightNum)}</p>
           </div>
         </div>
       </div>
@@ -822,7 +839,7 @@ class Game {
             </div>
           </div>
           <div class="panel-body">
-            <p class="subtitle">Five Nights survived. EJ may return… but not tonight.</p>
+            <p class="subtitle">${MESSAGES.winMessage}</p>
           </div>
         </div>
       </div>
@@ -846,7 +863,7 @@ class Game {
             </div>
           </div>
           <div class="panel-body">
-            <p class="subtitle">${name} reached your office. Unfortunate.</p>
+            <p class="subtitle">${MESSAGES.gameOver(name)}</p>
           </div>
         </div>
       </div>
@@ -1396,18 +1413,35 @@ class Game {
     g.restore();
   }
 
+  drawTitleCoverFace(g, img, x, y, size, { flip = false, tilt = 0 } = {}) {
+    if (!img) return;
+    g.save();
+    g.globalAlpha = 0.9;
+    g.translate(x, y);
+    if (flip) g.scale(-1, 1);
+    g.rotate(tilt);
+    g.drawImage(img, -size / 2, -size / 2, size, size);
+    g.restore();
+  }
+
   drawTitleBackground(g) {
     g.drawImage(this.assets.titleBg, 0, 0, 960, 540);
     g.save();
     g.fillStyle = "rgba(0,0,0,0.45)";
     g.fillRect(0, 0, 960, 540);
+
+    // Two EJ photos on the cover (ej_threat1 + ej_threat2 by default).
+    const [leftId, rightId] = TITLE_COVER_THREATS;
+    this.drawTitleCoverFace(g, this.assets.threatFaces.get(leftId), 150, 290, 250, { tilt: -0.06 });
+    this.drawTitleCoverFace(g, this.assets.threatFaces.get(rightId), 810, 290, 250, { flip: true, tilt: 0.06 });
+
     g.font = "900 44px ui-monospace, Menlo, Monaco, Consolas, 'Courier New', monospace";
     g.fillStyle = "rgba(255,255,255,0.92)";
-    g.fillText("FIVE NIGHTS", 52, 120);
-    g.fillText("AT EJ'S", 52, 170);
+    g.fillText(MESSAGES.titleLine1, 52, 120);
+    g.fillText(MESSAGES.titleLine2, 52, 170);
     g.font = "600 16px ui-monospace, Menlo, Monaco, Consolas, 'Courier New', monospace";
     g.fillStyle = "rgba(168,255,106,0.75)";
-    g.fillText("Press Start • Or hit C in-game for cameras", 54, 210);
+    g.fillText(MESSAGES.titleHint, 54, 210);
     g.restore();
     this.drawFilmGrain(g, 0.12);
   }
