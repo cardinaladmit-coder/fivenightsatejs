@@ -97,7 +97,8 @@ const MESSAGES = {
   gameTitle: "Five Nights at EJ's",
   titleLine1: "FIVE NIGHTS",
   titleLine2: "AT EJ'S",
-  titleHint: "Press Start • Or hit C in-game for cameras",
+  titleHint: "Five nights. One office. Don't get touched.",
+  getStartedLabel: "Let's Get Started",
   introSubtitle: "Survive 12 AM → 6 AM. Keep the doors shut. Keep the power up. Don't let EJ touch you.",
   nightCongrats: (nightNum) => `Congrats! You survived Night ${nightNum}.`,
   finalNightCongrats: "Congrats! You beat all 5 nights!",
@@ -123,8 +124,8 @@ const ASSET_SLOTS = {
     "assets/room_cam1.png",
     "assets/room_cam2.png",
     "assets/room_cam3.png",
-    "assets/room_cam4.png",
-    "assets/room_cam5.png",
+    "assets/hallways.png", // CAM 4 — west hall path (The Shed)
+    "assets/hallways.png", // CAM 5 — east hall path (Roble), flipped in-game
     "assets/room_cam6.png",
     "assets/room_cam7.png",
     "assets/room_cam8.png",
@@ -530,6 +531,7 @@ class Game {
     this.camRoom = 0;
     this.camFlicker = 0;
     this.helpOpen = false;
+    this.titleMenuOpen = false;
 
     // Night state
     this.nightIndex = 0; // 0..4
@@ -696,7 +698,24 @@ class Game {
 
   showTitle() {
     this.mode = "TITLE";
+    this.titleMenuOpen = false;
     this.clearOverlays();
+    this.mountOverlay(`
+      <div class="overlay overlay-home" role="dialog" aria-label="Homepage">
+        <div class="home-actions">
+          <button id="uiGetStarted" class="btn btn-primary btn-hero" type="button">${MESSAGES.getStartedLabel}</button>
+        </div>
+      </div>
+    `);
+    this.overlayRoot.querySelector("#uiGetStarted")?.addEventListener("click", async () => {
+      await this.sound.unlock();
+      this.showTitleMenu();
+    });
+  }
+
+  showTitleMenu() {
+    this.mode = "TITLE";
+    this.titleMenuOpen = true;
     const unlocked = this.progress.maxNightBeaten;
     const nightOptions = Array.from({ length: 5 }, (_, i) => {
       const nightNum = i + 1;
@@ -705,13 +724,12 @@ class Game {
     }).join("");
 
     this.mountOverlay(`
-      <div class="overlay overlay-title" role="dialog" aria-label="Title screen">
-        <div class="title-stage">
-          <img class="title-ej title-ej-left" id="titleEjLeft" alt="EJ" />
-          <div class="panel panel-title-menu">
+      <div class="overlay overlay-title-menu" role="dialog" aria-label="Title menu">
+        <div class="panel panel-title-menu">
           <div class="panel-header">
             <div class="panel-title">${MESSAGES.gameTitle}</div>
             <div class="panel-actions">
+              <button id="uiBackHome" class="btn" type="button">Back</button>
               <button id="uiSound" class="btn" type="button">SOUND: ${this.sound.enabled ? "ON" : "OFF"}</button>
             </div>
           </div>
@@ -736,21 +754,12 @@ class Game {
               </div>
             </div>
           </div>
-          </div>
-          <img class="title-ej title-ej-right" id="titleEjRight" alt="EJ" />
         </div>
       </div>
     `);
 
-    const [coverLeftId, coverRightId] = TITLE_COVER_THREATS;
-    const coverLeftImg = this.assets.threatFaces.get(coverLeftId);
-    const coverRightImg = this.assets.threatFaces.get(coverRightId);
-    const titleEjLeft = this.overlayRoot.querySelector("#titleEjLeft");
-    const titleEjRight = this.overlayRoot.querySelector("#titleEjRight");
-    if (titleEjLeft && coverLeftImg) titleEjLeft.src = coverLeftImg.src;
-    if (titleEjRight && coverRightImg) titleEjRight.src = coverRightImg.src;
-
     const $ = (id) => this.overlayRoot.querySelector(id);
+    $("#uiBackHome")?.addEventListener("click", () => this.showTitle());
     $("#uiStart")?.addEventListener("click", async () => {
       await this.sound.unlock();
       this.startNight(0);
@@ -763,12 +772,12 @@ class Game {
     $("#uiReset")?.addEventListener("click", () => {
       this.progress.maxNightBeaten = 0;
       saveProgress(this.progress);
-      this.showTitle();
+      this.showTitleMenu();
     });
     $("#uiHow")?.addEventListener("click", () => this.toggleHelp(true));
     $("#uiSound")?.addEventListener("click", () => {
       this.sound.setEnabled(!this.sound.enabled);
-      this.showTitle();
+      this.showTitleMenu();
     });
     this.overlayRoot.querySelectorAll("button[data-night]").forEach((btn) => {
       btn.addEventListener("click", async () => {
@@ -783,7 +792,10 @@ class Game {
     this.helpOpen = open;
     if (!open) {
       // Return to previous overlay if we're on title; otherwise just close help.
-      if (this.mode === "TITLE") this.showTitle();
+      if (this.mode === "TITLE") {
+        if (this.titleMenuOpen) this.showTitleMenu();
+        else this.showTitle();
+      }
       else this.clearOverlays();
       return;
     }
@@ -1346,9 +1358,21 @@ class Game {
   }
 
   drawCamerasFeed(g) {
-    // Draw selected room still
     const roomImg = this.assets.rooms[this.camRoom];
-    if (roomImg) g.drawImage(roomImg, 0, 0, 960, 540);
+    const isEastHall = this.camRoom === ROOM.HALL_E;
+
+    // Draw selected room still (east hall uses a mirrored hallway photo).
+    if (roomImg) {
+      if (isEastHall) {
+        g.save();
+        g.translate(960, 0);
+        g.scale(-1, 1);
+        g.drawImage(roomImg, 0, 0, 960, 540);
+        g.restore();
+      } else {
+        g.drawImage(roomImg, 0, 0, 960, 540);
+      }
+    }
 
     // Composite any threats that are currently in this room
     for (const th of this.threats) {
@@ -1357,13 +1381,13 @@ class Game {
         const face = this.assets.threatFaces.get(th.def.id);
         if (!face) continue;
         const wob = Math.sin(performance.now() / 170 + this.camRoom * 2.2) * 4;
-        const x = 520 + wob;
+        const x = isEastHall ? 440 - wob : 520 + wob;
         const y = 270 + Math.cos(performance.now() / 210) * 3;
         const size = 220;
         g.save();
         g.globalAlpha = 0.86;
         g.translate(x, y);
-        g.rotate(0.03);
+        g.rotate(isEastHall ? -0.03 : 0.03);
         g.drawImage(face, -size / 2, -size / 2, size, size);
         g.restore();
       }
@@ -1451,28 +1475,30 @@ class Game {
   drawTitleBackground(g) {
     g.drawImage(this.assets.titleBg, 0, 0, 960, 540);
     g.save();
-    // Darken center only so edge EJs stay bright.
-    const shade = g.createRadialGradient(480, 270, 80, 480, 270, 520);
-    shade.addColorStop(0, "rgba(0,0,0,0.55)");
-    shade.addColorStop(0.55, "rgba(0,0,0,0.35)");
-    shade.addColorStop(1, "rgba(0,0,0,0.12)");
+    // Light vignette so the homepage art and EJs stay visible.
+    const shade = g.createRadialGradient(480, 250, 120, 480, 250, 500);
+    shade.addColorStop(0, "rgba(0,0,0,0.18)");
+    shade.addColorStop(0.7, "rgba(0,0,0,0.28)");
+    shade.addColorStop(1, "rgba(0,0,0,0.42)");
     g.fillStyle = shade;
     g.fillRect(0, 0, 960, 540);
 
-    // Large EJ photos peeking in from the sides (also shown beside the menu in HTML).
+    // Large EJ photos on the homepage.
     const [leftId, rightId] = TITLE_COVER_THREATS;
-    this.drawTitleCoverFace(g, this.assets.threatFaces.get(leftId), 95, 270, 310, { tilt: -0.08 });
-    this.drawTitleCoverFace(g, this.assets.threatFaces.get(rightId), 865, 270, 310, { flip: true, tilt: 0.08 });
+    this.drawTitleCoverFace(g, this.assets.threatFaces.get(leftId), 130, 255, 340, { tilt: -0.08 });
+    this.drawTitleCoverFace(g, this.assets.threatFaces.get(rightId), 830, 255, 340, { flip: true, tilt: 0.08 });
 
-    g.font = "900 44px ui-monospace, Menlo, Monaco, Consolas, 'Courier New', monospace";
-    g.fillStyle = "rgba(255,255,255,0.92)";
-    g.fillText(MESSAGES.titleLine1, 52, 120);
-    g.fillText(MESSAGES.titleLine2, 52, 170);
-    g.font = "600 16px ui-monospace, Menlo, Monaco, Consolas, 'Courier New', monospace";
-    g.fillStyle = "rgba(168,255,106,0.75)";
-    g.fillText(MESSAGES.titleHint, 54, 210);
+    g.textAlign = "center";
+    g.font = "900 52px ui-monospace, Menlo, Monaco, Consolas, 'Courier New', monospace";
+    g.fillStyle = "rgba(255,255,255,0.95)";
+    g.fillText(MESSAGES.titleLine1, 480, 175);
+    g.fillText(MESSAGES.titleLine2, 480, 235);
+    g.font = "600 17px ui-monospace, Menlo, Monaco, Consolas, 'Courier New', monospace";
+    g.fillStyle = "rgba(168,255,106,0.82)";
+    g.fillText(MESSAGES.titleHint, 480, 275);
+    g.textAlign = "left";
     g.restore();
-    this.drawFilmGrain(g, 0.12);
+    this.drawFilmGrain(g, 0.10);
   }
 
   drawWinBackground(g) {
