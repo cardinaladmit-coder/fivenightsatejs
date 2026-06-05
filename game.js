@@ -19,9 +19,9 @@ const CONFIG = {
   POWER_START: 100,
   POWER_DRAIN_BASE_PER_SEC: 0.045, // always draining a little
   POWER_DRAIN_CAMERA_PER_SEC: 0.12,
-  POWER_DRAIN_DOOR_CLOSED_PER_SEC: 0.11, // per closed door
-  POWER_DRAIN_LIGHT_ON_PER_SEC: 0.15, // per light
-  POWER_DRAIN_SPIKE_DOOR_TOGGLE: 0.20,
+  POWER_DRAIN_DOOR_CLOSED_PER_SEC: 0.30, // per closed door — can't camp doors all night
+  POWER_DRAIN_LIGHT_ON_PER_SEC: 0.40, // per light — tap lights, don't hold them
+  POWER_DRAIN_SPIKE_DOOR_TOGGLE: 0.25,
   POWER_DRAIN_SPIKE_CAMERA_TOGGLE: 0.12,
 
   // How quickly nights get harder (also affects power drain a bit)
@@ -937,7 +937,7 @@ class Game {
             <p><strong>Power:</strong> everything drains power. If power hits <strong>0%</strong>, doors open and you’re defenseless.</p>
             <p><strong>Audio cue:</strong> a background track plays quietly the whole time the game is open and <strong>slowly gets louder</strong> as EJ gets closer to your office during a night. It never gets super loud — but if the music swells, check your doors.</p>
             <p><strong>Keyboard:</strong> <kbd>A</kbd> left door, <kbd>D</kbd> right door, <kbd>Q</kbd> left light, <kbd>E</kbd> right light, <kbd>C</kbd> cameras, <kbd>Esc</kbd> close cameras/help.</p>
-            <p style="color: rgba(255,214,90,0.92)"><strong>Pro tip:</strong> Don’t camp both doors closed. Use the lights to confirm, then close only when needed.</p>
+            <p style="color: rgba(255,214,90,0.92)"><strong>Pro tip:</strong> Doors and lights drain power fast. Don’t camp both doors closed, and only flash the lights for a quick check.</p>
           </div>
         </div>
       </div>
