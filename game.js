@@ -403,7 +403,7 @@ class Sound {
 
   startProximityMusic() {
     if (!this.enabled) return;
-    this.stopProximityMusic();
+    if (this._bgMusicPlaying) return;
     this._proximityVolume = CONFIG.PROXIMITY_MUSIC_MIN_VOLUME;
 
     const track = this.files.get("bgMusic");
@@ -859,6 +859,7 @@ class Game {
     $("#uiHow")?.addEventListener("click", () => this.toggleHelp(true));
     $("#uiSound")?.addEventListener("click", () => {
       this.sound.setEnabled(!this.sound.enabled);
+      if (this.sound.enabled) this.ensureBackgroundMusic();
       this.showTitleMenu();
     });
     this.overlayRoot.querySelectorAll("button[data-night]").forEach((btn) => {
@@ -895,7 +896,7 @@ class Game {
             <p><strong>Cameras:</strong> hit <kbd>C</kbd> or click <strong>CAMERAS</strong> to watch rooms. Threats advance faster when you ignore them.</p>
             <p><strong>Doors:</strong> left and right each have a <strong>CLOSE</strong> and <strong>LIGHT</strong>. Close blocks EJ at that side. Light reveals if EJ is waiting.</p>
             <p><strong>Power:</strong> everything drains power. If power hits <strong>0%</strong>, doors open and you’re defenseless.</p>
-            <p><strong>Audio cue:</strong> a background track plays quietly all night and <strong>slowly gets louder</strong> as EJ gets closer to your office. It never gets super loud — but if the music swells, check your doors.</p>
+            <p><strong>Audio cue:</strong> a background track plays quietly the whole time the game is open and <strong>slowly gets louder</strong> as EJ gets closer to your office during a night. It never gets super loud — but if the music swells, check your doors.</p>
             <p><strong>Keyboard:</strong> <kbd>A</kbd> left door, <kbd>D</kbd> right door, <kbd>Q</kbd> left light, <kbd>E</kbd> right light, <kbd>C</kbd> cameras, <kbd>Esc</kbd> close cameras/help.</p>
             <p style="color: rgba(255,214,90,0.92)"><strong>Pro tip:</strong> Don’t camp both doors closed. Use the lights to confirm, then close only when needed.</p>
           </div>
@@ -909,7 +910,6 @@ class Game {
     this.mode = "NIGHTCLEAR";
     this.titleMenuOpen = false;
     this.updateChromeVisibility();
-    this.sound.stopNightAudio();
     const nightNum = this.nightIndex + 1;
     const nextNight = nightNum + 1;
     const isWin = nightNum >= 5;
@@ -941,7 +941,6 @@ class Game {
     this.mode = "WIN";
     this.titleMenuOpen = false;
     this.updateChromeVisibility();
-    this.sound.stopNightAudio();
     this.mountOverlay(`
       <div class="overlay" role="dialog" aria-label="Win screen">
         <div class="panel">
@@ -965,7 +964,6 @@ class Game {
     this.mode = "GAMEOVER";
     this.titleMenuOpen = false;
     this.updateChromeVisibility();
-    this.sound.stopNightAudio();
     const t = THREATS.find((x) => x.id === threatId);
     const name = t?.name || "EJ";
     this.mountOverlay(`
@@ -1122,8 +1120,12 @@ class Game {
     const lanes = ["LEFT", "RIGHT", "WANDER", "WANDER"];
     this.threats = defs.map((d, i) => new Threat(d, lanes[i % lanes.length], diff, this.nightIndex));
 
-    this.sound.startProximityMusic();
+    this.ensureBackgroundMusic();
     this.updateHud();
+  }
+
+  ensureBackgroundMusic() {
+    this.sound.startProximityMusic();
   }
 
   getThreatProximity(th) {
@@ -1322,7 +1324,6 @@ class Game {
     this.mode = "JUMPSCARE";
     this.lastScareThreatId = threatId;
     this.attackCountdown = null;
-    this.sound.stopNightAudio();
     this.sound.jumpscareSting();
 
     // Show jumpscare, then game over overlay.
@@ -1717,6 +1718,9 @@ class Game {
       this.updateThreats();
       this.updateProximityMusic(dt);
       this.updateHud();
+    } else {
+      // Keep baseline volume on title screens, menus, and game-over overlays.
+      this.sound.setProximityLevel(0, dt);
     }
     this.render();
   }
@@ -1751,13 +1755,22 @@ function roundRect(ctx, x, y, w, h, r) {
   btnCam?.addEventListener("click", () => game.toggleCameras());
   btnMute?.addEventListener("click", () => {
     game.sound.setEnabled(!game.sound.enabled);
+    if (game.sound.enabled) game.ensureBackgroundMusic();
     if (btnMute) btnMute.textContent = `SOUND: ${game.sound.enabled ? "ON" : "OFF"}`;
   });
   btnHelp?.addEventListener("click", () => game.toggleHelp(true));
-  document.getElementById("btnGetStarted")?.addEventListener("click", async () => {
+  const startSiteMusic = async () => {
     await game.sound.unlock();
+    game.ensureBackgroundMusic();
+  };
+
+  document.getElementById("btnGetStarted")?.addEventListener("click", async () => {
+    await startSiteMusic();
     game.showTitleMenu();
   });
+
+  // Browsers require a click before audio — start the bg track on first interaction.
+  document.addEventListener("click", () => { void startSiteMusic(); }, { once: true });
 
   await game.loadAssets();
   game.showTitle();
