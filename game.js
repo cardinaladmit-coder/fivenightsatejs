@@ -98,10 +98,11 @@ const MESSAGES = {
   titleLine1: "FIVE NIGHTS",
   titleLine2: "AT EJ'S",
   titleHint: "Press Start • Or hit C in-game for cameras",
-  introSubtitle: "Survive 12 AM → 6 AM. Keep the doors shut. Keep the power up. Don't let EJ touch your... dih.",
-  nightCleared: (nightNum) => `You survived Night ${nightNum}.`,
-  finalNightCleared: "EJ has been defeated (for now). Your booty remains un-stolen.",
-  winMessage: "Five Nights survived. EJ may return… but not tonight.",
+  introSubtitle: "Survive 12 AM → 6 AM. Keep the doors shut. Keep the power up. Don't let EJ touch you.",
+  nightCongrats: (nightNum) => `Congrats! You survived Night ${nightNum}.`,
+  finalNightCongrats: "Congrats! You beat all 5 nights!",
+  finalNightCleared: "EJ has been defeated (for now). Your valuables remain untouched.",
+  winMessage: "Five nights down. EJ may return… but not tonight.",
   gameOver: (ejName) => `${ejName} reached your office. Unfortunate.`,
 };
 
@@ -704,8 +705,10 @@ class Game {
     }).join("");
 
     this.mountOverlay(`
-      <div class="overlay" role="dialog" aria-label="Title screen">
-        <div class="panel">
+      <div class="overlay overlay-title" role="dialog" aria-label="Title screen">
+        <div class="title-stage">
+          <img class="title-ej title-ej-left" id="titleEjLeft" alt="EJ" />
+          <div class="panel panel-title-menu">
           <div class="panel-header">
             <div class="panel-title">${MESSAGES.gameTitle}</div>
             <div class="panel-actions">
@@ -733,9 +736,19 @@ class Game {
               </div>
             </div>
           </div>
+          </div>
+          <img class="title-ej title-ej-right" id="titleEjRight" alt="EJ" />
         </div>
       </div>
     `);
+
+    const [coverLeftId, coverRightId] = TITLE_COVER_THREATS;
+    const coverLeftImg = this.assets.threatFaces.get(coverLeftId);
+    const coverRightImg = this.assets.threatFaces.get(coverRightId);
+    const titleEjLeft = this.overlayRoot.querySelector("#titleEjLeft");
+    const titleEjRight = this.overlayRoot.querySelector("#titleEjRight");
+    if (titleEjLeft && coverLeftImg) titleEjLeft.src = coverLeftImg.src;
+    if (titleEjRight && coverRightImg) titleEjRight.src = coverRightImg.src;
 
     const $ = (id) => this.overlayRoot.querySelector(id);
     $("#uiStart")?.addEventListener("click", async () => {
@@ -814,7 +827,8 @@ class Game {
             </div>
           </div>
           <div class="panel-body">
-            <p class="subtitle">${isWin ? MESSAGES.finalNightCleared : MESSAGES.nightCleared(nightNum)}</p>
+            <h2 class="congrats-title">${isWin ? MESSAGES.finalNightCongrats : MESSAGES.nightCongrats(nightNum)}</h2>
+            <p class="subtitle">${isWin ? MESSAGES.finalNightCleared : "Keep your doors ready — EJ isn't giving up."}</p>
           </div>
         </div>
       </div>
@@ -839,6 +853,7 @@ class Game {
             </div>
           </div>
           <div class="panel-body">
+            <h2 class="congrats-title">${MESSAGES.finalNightCongrats}</h2>
             <p class="subtitle">${MESSAGES.winMessage}</p>
           </div>
         </div>
@@ -1416,7 +1431,16 @@ class Game {
   drawTitleCoverFace(g, img, x, y, size, { flip = false, tilt = 0 } = {}) {
     if (!img) return;
     g.save();
-    g.globalAlpha = 0.9;
+    // Glow behind face so it pops on the background.
+    const glow = g.createRadialGradient(x, y, size * 0.1, x, y, size * 0.75);
+    glow.addColorStop(0, "rgba(168,255,106,0.22)");
+    glow.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = glow;
+    g.beginPath();
+    g.arc(x, y, size * 0.75, 0, Math.PI * 2);
+    g.fill();
+
+    g.globalAlpha = 1;
     g.translate(x, y);
     if (flip) g.scale(-1, 1);
     g.rotate(tilt);
@@ -1427,13 +1451,18 @@ class Game {
   drawTitleBackground(g) {
     g.drawImage(this.assets.titleBg, 0, 0, 960, 540);
     g.save();
-    g.fillStyle = "rgba(0,0,0,0.45)";
+    // Darken center only so edge EJs stay bright.
+    const shade = g.createRadialGradient(480, 270, 80, 480, 270, 520);
+    shade.addColorStop(0, "rgba(0,0,0,0.55)");
+    shade.addColorStop(0.55, "rgba(0,0,0,0.35)");
+    shade.addColorStop(1, "rgba(0,0,0,0.12)");
+    g.fillStyle = shade;
     g.fillRect(0, 0, 960, 540);
 
-    // Two EJ photos on the cover (ej_threat1 + ej_threat2 by default).
+    // Large EJ photos peeking in from the sides (also shown beside the menu in HTML).
     const [leftId, rightId] = TITLE_COVER_THREATS;
-    this.drawTitleCoverFace(g, this.assets.threatFaces.get(leftId), 150, 290, 250, { tilt: -0.06 });
-    this.drawTitleCoverFace(g, this.assets.threatFaces.get(rightId), 810, 290, 250, { flip: true, tilt: 0.06 });
+    this.drawTitleCoverFace(g, this.assets.threatFaces.get(leftId), 95, 270, 310, { tilt: -0.08 });
+    this.drawTitleCoverFace(g, this.assets.threatFaces.get(rightId), 865, 270, 310, { flip: true, tilt: 0.08 });
 
     g.font = "900 44px ui-monospace, Menlo, Monaco, Consolas, 'Courier New', monospace";
     g.fillStyle = "rgba(255,255,255,0.92)";
