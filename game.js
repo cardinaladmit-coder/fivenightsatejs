@@ -109,7 +109,7 @@ const MESSAGES = {
   finalNightCongrats: "Congrats! You beat all 5 nights!",
   finalNightCleared: "EJ has been defeated (for now). Your valuables remain untouched.",
   winMessage: "Five nights down. EJ may return… but not tonight.",
-  gameOver: (ejName) => `${ejName} reached your office. Unfortunate.`,
+  gameOver: () => "You've been touched by the plymouth brethern...game over",
 };
 
 // Which two EJ photos appear on the title/cover screen (must match THREATS ids above).
