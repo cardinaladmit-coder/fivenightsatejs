@@ -93,9 +93,9 @@ const THREATS = [
   },
 ];
 
-// Which (and how many) threats are active per night.
+// Which (and how many) threats are active per night (max 2 EJs — uses threat1 & threat2).
 // Tweak this to make nights gentler or meaner.
-const THREATS_PER_NIGHT = [3, 3, 4, 4, 4];
+const THREATS_PER_NIGHT = [1, 2, 2, 2, 2];
 
 // All intro / end story text in one place. Edit these to change what players see.
 const MESSAGES = {
